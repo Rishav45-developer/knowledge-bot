@@ -24,4 +24,11 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_sttributes = True
+
+
+class ChatResponse(BaseModel):
+    user_message: MessageResponse
+    assistant_message: MessageResponse
+
+            
             

@@ -4,19 +4,28 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.models.conversation import Conversation
 from app.models.message import Message
+
 from app.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
     MessageCreate,
-    MessageResponse
+    MessageResponse,
+    ChatResponse
 )
+
 from app.security.dependencies import get_current_user
+
+from app.ai.graph import build_chat_graph
 
 
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"]
 )
+
+
+# Build LangGraph once when the service starts
+chat_graph = build_chat_graph()
 
 
 # =========================================================
@@ -71,12 +80,12 @@ def create_conversation(
 
 
 # =========================================================
-# 3. ADD MESSAGE TO A CONVERSATION
+# 3. SEND MESSAGE + GET AI RESPONSE
 # =========================================================
 
 @router.post(
     "/conversations/{conversation_id}/messages",
-    response_model=MessageResponse
+    response_model=ChatResponse
 )
 def create_message(
     conversation_id: int,
@@ -86,7 +95,10 @@ def create_message(
 ):
     user_id = int(current_user["sub"])
 
-    # Check that the conversation belongs to the logged-in user
+    # -----------------------------------------------------
+    # Step 1: Check conversation ownership
+    # -----------------------------------------------------
+
     conversation = (
         db.query(Conversation)
         .filter(
@@ -102,17 +114,53 @@ def create_message(
             detail="Conversation not found"
         )
 
-    new_message = Message(
+    # -----------------------------------------------------
+    # Step 2: Save user's message
+    # -----------------------------------------------------
+
+    user_message = Message(
         conversation_id=conversation_id,
         role="user",
         content=message_data.content
     )
 
-    db.add(new_message)
+    db.add(user_message)
     db.commit()
-    db.refresh(new_message)
+    db.refresh(user_message)
 
-    return new_message
+    # -----------------------------------------------------
+    # Step 3: Send message to LangGraph
+    # -----------------------------------------------------
+
+    result = chat_graph.invoke({
+        "message": message_data.content,
+        "response": ""
+    })
+
+    ai_response = result["response"]
+
+    # -----------------------------------------------------
+    # Step 4: Save AI response
+    # -----------------------------------------------------
+
+    assistant_message = Message(
+        conversation_id=conversation_id,
+        role="assistant",
+        content=ai_response
+    )
+
+    db.add(assistant_message)
+    db.commit()
+    db.refresh(assistant_message)
+
+    # -----------------------------------------------------
+    # Step 5: Return both messages
+    # -----------------------------------------------------
+
+    return {
+        "user_message": user_message,
+        "assistant_message": assistant_message
+    }
 
 
 # =========================================================
@@ -130,7 +178,10 @@ def get_conversation_messages(
 ):
     user_id = int(current_user["sub"])
 
-    # First check ownership of the conversation
+    # -----------------------------------------------------
+    # Check ownership
+    # -----------------------------------------------------
+
     conversation = (
         db.query(Conversation)
         .filter(
@@ -146,7 +197,10 @@ def get_conversation_messages(
             detail="Conversation not found"
         )
 
-    # Get all messages belonging to this conversation
+    # -----------------------------------------------------
+    # Get messages
+    # -----------------------------------------------------
+
     messages = (
         db.query(Message)
         .filter(
