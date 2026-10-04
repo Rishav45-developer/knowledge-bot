@@ -1,0 +1,32 @@
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables
+.env
+
+# Local uploaded documents
+uploads/*
+
+# Local ChromaDB vector database
+chroma_db/
+
+# Test files generated locally
+test.txt
+test.pdf
+test.docx
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

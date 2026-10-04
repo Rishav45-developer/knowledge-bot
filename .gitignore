@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# ChromaDB local vector database
+**/chroma_db/

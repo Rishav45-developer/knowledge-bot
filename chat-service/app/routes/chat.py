@@ -115,7 +115,32 @@ def create_message(
         )
 
     # -----------------------------------------------------
-    # Step 2: Save user's message
+    # Step 2: Load previous messages from PostgreSQL
+    # -----------------------------------------------------
+
+    previous_messages = (
+        db.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id
+        )
+        .order_by(Message.id.asc())
+        .all()
+    )
+
+    # -----------------------------------------------------
+    # Step 3: Convert database messages into history
+    # -----------------------------------------------------
+
+    history = []
+
+    for message in previous_messages:
+        history.append({
+            "role": message.role,
+            "content": message.content
+        })
+
+    # -----------------------------------------------------
+    # Step 4: Save current user's message
     # -----------------------------------------------------
 
     user_message = Message(
@@ -129,18 +154,19 @@ def create_message(
     db.refresh(user_message)
 
     # -----------------------------------------------------
-    # Step 3: Send message to LangGraph
+    # Step 5: Send history + current message to LangGraph
     # -----------------------------------------------------
 
     result = chat_graph.invoke({
         "message": message_data.content,
+        "history": history,
         "response": ""
     })
 
     ai_response = result["response"]
 
     # -----------------------------------------------------
-    # Step 4: Save AI response
+    # Step 6: Save AI response
     # -----------------------------------------------------
 
     assistant_message = Message(
@@ -154,7 +180,7 @@ def create_message(
     db.refresh(assistant_message)
 
     # -----------------------------------------------------
-    # Step 5: Return both messages
+    # Step 7: Return both messages
     # -----------------------------------------------------
 
     return {
@@ -179,7 +205,7 @@ def get_conversation_messages(
     user_id = int(current_user["sub"])
 
     # -----------------------------------------------------
-    # Check ownership
+    # Step 1: Check conversation ownership
     # -----------------------------------------------------
 
     conversation = (
@@ -198,7 +224,7 @@ def get_conversation_messages(
         )
 
     # -----------------------------------------------------
-    # Get messages
+    # Step 2: Get all messages
     # -----------------------------------------------------
 
     messages = (
@@ -211,3 +237,7 @@ def get_conversation_messages(
     )
 
     return messages
+
+
+
+
