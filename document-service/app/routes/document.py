@@ -21,7 +21,8 @@ from app.processors.chunker import split_text
 
 from app.vectorstore.chroma import (
     store_chunk,
-    search_chunks
+    search_chunks,
+    delete_document_chunks
 )
 
 
@@ -34,7 +35,14 @@ router = APIRouter(
 UPLOAD_DIR = "uploads"
 
 
-@router.post("/upload", response_model=DocumentResponse)
+# --------------------------------------------------
+# Upload document
+# --------------------------------------------------
+
+@router.post(
+    "/upload",
+    response_model=DocumentResponse
+)
 def upload_document(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -47,18 +55,28 @@ def upload_document(
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     # Create the file path
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    file_path = os.path.join(
+        UPLOAD_DIR,
+        file.filename
+    )
 
     try:
         # Save the uploaded file
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            shutil.copyfileobj(
+                file.file,
+                buffer
+            )
 
         # Extract text from the uploaded document
-        extracted_text = extract_text(file_path)
+        extracted_text = extract_text(
+            file_path
+        )
 
         # Split extracted text into smaller chunks
-        chunks = split_text(extracted_text)
+        chunks = split_text(
+            extracted_text
+        )
 
         # Create the document record
         document = Document(
@@ -70,10 +88,11 @@ def upload_document(
 
         db.add(document)
 
-        # Get the generated document ID before creating chunks
+        # Get the generated document ID
         db.flush()
 
-        # Create database records and ChromaDB vectors
+        # Create database records
+        # and ChromaDB vectors
         for index, chunk in enumerate(chunks):
 
             # Save chunk to PostgreSQL
@@ -85,7 +104,8 @@ def upload_document(
 
             db.add(document_chunk)
 
-            # Generate embedding and store chunk in ChromaDB
+            # Generate embedding and store
+            # chunk in ChromaDB
             store_chunk(
                 chunk_id=f"{document.id}-{index}",
                 content=chunk,
@@ -108,7 +128,8 @@ def upload_document(
         # Roll back PostgreSQL changes
         db.rollback()
 
-        # Delete uploaded file if something failed
+        # Delete uploaded file if
+        # something failed
         if os.path.exists(file_path):
             os.remove(file_path)
 
@@ -118,7 +139,14 @@ def upload_document(
         )
 
 
-@router.get("/", response_model=list[DocumentResponse])
+# --------------------------------------------------
+# Get my documents
+# --------------------------------------------------
+
+@router.get(
+    "/",
+    response_model=list[DocumentResponse]
+)
 def get_my_documents(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -127,8 +155,12 @@ def get_my_documents(
 
     documents = (
         db.query(Document)
-        .filter(Document.user_id == user_id)
-        .order_by(Document.id.desc())
+        .filter(
+            Document.user_id == user_id
+        )
+        .order_by(
+            Document.id.desc()
+        )
         .all()
     )
 
@@ -144,10 +176,12 @@ def search_documents(
     search_data: DocumentSearchRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    # Get the logged-in user's ID from the JWT
+    # Get the logged-in user's ID
+    # from the JWT
     user_id = int(current_user["sub"])
 
-    # Search ChromaDB for relevant document chunks
+    # Search ChromaDB for relevant
+    # document chunks
     results = search_chunks(
         query=search_data.query,
         user_id=user_id,
@@ -157,7 +191,14 @@ def search_documents(
     return results
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+# --------------------------------------------------
+# Get single document
+# --------------------------------------------------
+
+@router.get(
+    "/{document_id}",
+    response_model=DocumentResponse
+)
 def get_document(
     document_id: int,
     current_user: dict = Depends(get_current_user),
@@ -183,6 +224,10 @@ def get_document(
     return document
 
 
+# --------------------------------------------------
+# Delete document
+# --------------------------------------------------
+
 @router.delete("/{document_id}")
 def delete_document(
     document_id: int,
@@ -206,15 +251,55 @@ def delete_document(
             detail="Document not found"
         )
 
-    # Delete the physical file
-    if os.path.exists(document.file_path):
-        os.remove(document.file_path)
+    try:
 
-    # Delete the document record
-    db.delete(document)
+        # ------------------------------------------
+        # 1. Delete vectors from ChromaDB
+        # ------------------------------------------
 
-    db.commit()
+        delete_document_chunks(
+            document_id=document.id,
+            user_id=user_id
+        )
 
-    return {
-        "message": "Document deleted successfully"
-    }
+        # ------------------------------------------
+        # 2. Delete physical file
+        # ------------------------------------------
+
+        if os.path.exists(document.file_path):
+            os.remove(document.file_path)
+
+        # ------------------------------------------
+        # 3. Delete document chunks
+        #    from PostgreSQL
+        # ------------------------------------------
+
+        db.query(DocumentChunk).filter(
+            DocumentChunk.document_id == document.id
+        ).delete(
+            synchronize_session=False
+        )
+
+        # ------------------------------------------
+        # 4. Delete document record
+        #    from PostgreSQL
+        # ------------------------------------------
+
+        db.delete(document)
+
+        # Save all database changes
+        db.commit()
+
+        return {
+            "message": "Document deleted successfully"
+        }
+
+    except Exception as error:
+
+        # Roll back PostgreSQL changes
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document deletion failed: {str(error)}"
+        )
