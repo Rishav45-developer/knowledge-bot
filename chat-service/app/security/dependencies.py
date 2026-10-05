@@ -9,9 +9,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme)
-):
+def get_current_user(token: str = Depends(oauth2_scheme)):
     payload = verify_token(token)
 
     if payload is None:
@@ -19,5 +17,7 @@ def get_current_user(
             status_code=401,
             detail="Invalid or expired token"
         )
+
+    payload["token"] = token
 
     return payload

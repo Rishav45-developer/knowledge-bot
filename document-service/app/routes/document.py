@@ -9,12 +9,20 @@ from app.database.connection import get_db
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 
-from app.schemas.document import DocumentResponse
+from app.schemas.document import (
+    DocumentResponse,
+    DocumentSearchRequest
+)
 
 from app.security.dependencies import get_current_user
 
 from app.extractors.text_extractor import extract_text
 from app.processors.chunker import split_text
+
+from app.vectorstore.chroma import (
+    store_chunk,
+    search_chunks
+)
 
 
 router = APIRouter(
@@ -41,47 +49,73 @@ def upload_document(
     # Create the file path
     file_path = os.path.join(UPLOAD_DIR, file.filename)
 
-    # Save the uploaded file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        # Save the uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    # Extract text from the uploaded document
-    extracted_text = extract_text(file_path)
+        # Extract text from the uploaded document
+        extracted_text = extract_text(file_path)
 
-    # Split extracted text into smaller chunks
-    chunks = split_text(extracted_text)
+        # Split extracted text into smaller chunks
+        chunks = split_text(extracted_text)
 
-    # Create the document record
-    document = Document(
-        user_id=user_id,
-        filename=file.filename,
-        file_path=file_path,
-        extracted_text=extracted_text
-    )
-
-    db.add(document)
-
-    # Get the generated document ID before creating chunks
-    db.flush()
-
-    # Create a database record for every chunk
-    for index, chunk in enumerate(chunks):
-
-        document_chunk = DocumentChunk(
-            document_id=document.id,
-            chunk_index=index,
-            content=chunk
+        # Create the document record
+        document = Document(
+            user_id=user_id,
+            filename=file.filename,
+            file_path=file_path,
+            extracted_text=extracted_text
         )
 
-        db.add(document_chunk)
+        db.add(document)
 
-    # Save document and chunks
-    db.commit()
+        # Get the generated document ID before creating chunks
+        db.flush()
 
-    # Refresh document from database
-    db.refresh(document)
+        # Create database records and ChromaDB vectors
+        for index, chunk in enumerate(chunks):
 
-    return document
+            # Save chunk to PostgreSQL
+            document_chunk = DocumentChunk(
+                document_id=document.id,
+                chunk_index=index,
+                content=chunk
+            )
+
+            db.add(document_chunk)
+
+            # Generate embedding and store chunk in ChromaDB
+            store_chunk(
+                chunk_id=f"{document.id}-{index}",
+                content=chunk,
+                document_id=document.id,
+                chunk_index=index,
+                user_id=user_id,
+                filename=file.filename
+            )
+
+        # Save document and chunks
+        db.commit()
+
+        # Refresh document from database
+        db.refresh(document)
+
+        return document
+
+    except Exception as error:
+
+        # Roll back PostgreSQL changes
+        db.rollback()
+
+        # Delete uploaded file if something failed
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document processing failed: {str(error)}"
+        )
 
 
 @router.get("/", response_model=list[DocumentResponse])
@@ -99,6 +133,28 @@ def get_my_documents(
     )
 
     return documents
+
+
+# --------------------------------------------------
+# Semantic document search
+# --------------------------------------------------
+
+@router.post("/search")
+def search_documents(
+    search_data: DocumentSearchRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    # Get the logged-in user's ID from the JWT
+    user_id = int(current_user["sub"])
+
+    # Search ChromaDB for relevant document chunks
+    results = search_chunks(
+        query=search_data.query,
+        user_id=user_id,
+        n_results=search_data.n_results
+    )
+
+    return results
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

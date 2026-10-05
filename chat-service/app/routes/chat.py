@@ -154,12 +154,22 @@ def create_message(
     db.refresh(user_message)
 
     # -----------------------------------------------------
-    # Step 5: Send history + current message to LangGraph
+    # Step 5: Send message + history + JWT to LangGraph
     # -----------------------------------------------------
 
     result = chat_graph.invoke({
         "message": message_data.content,
         "history": history,
+
+        # Original JWT token.
+        # LangGraph will use this when calling
+        # the Document Service.
+        "token": current_user["token"],
+
+        # Retrieved document context will be filled
+        # by the retrieve_documents node.
+        "context": "",
+
         "response": ""
     })
 
@@ -237,7 +247,3 @@ def get_conversation_messages(
     )
 
     return messages
-
-
-
-
