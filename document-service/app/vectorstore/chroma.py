@@ -1,9 +1,22 @@
+import os
+
 import chromadb
+from dotenv import load_dotenv
 from langchain_ollama import OllamaEmbeddings
 
 
+load_dotenv()
+
+
+OLLAMA_BASE_URL = os.getenv(
+    "OLLAMA_BASE_URL",
+    "http://127.0.0.1:11434"
+)
+
+
 embedding_model = OllamaEmbeddings(
-    model="nomic-embed-text"
+    model="nomic-embed-text",
+    base_url=OLLAMA_BASE_URL
 )
 
 

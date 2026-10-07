@@ -1,0 +1,68 @@
+services:
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: knowledge-bot-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - user-service
+      - chat-service
+      - document-service
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: knowledge-bot-auth
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/auth_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+
+  user-service:
+    build:
+      context: ./user-service
+    container_name: knowledge-bot-user
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/user_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+
+  chat-service:
+    build:
+      context: ./chat-service
+    container_name: knowledge-bot-chat
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/chat_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      DOCUMENT_SERVICE_URL: http://document-service:8003
+    depends_on:
+      - document-service
+
+  document-service:
+    build:
+      context: ./document-service
+    container_name: knowledge-bot-document
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/document_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      - document_uploads:/app/uploads
+      - document_chroma:/app/chroma_db
+
+
+volumes:
+
+  document_uploads:
+
+  document_chroma:
