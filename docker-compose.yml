@@ -1,3 +1,4 @@
+
 services:
 
   api-gateway:
@@ -43,8 +44,11 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       DOCUMENT_SERVICE_URL: http://document-service:8003
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       - document-service
+      - redis
 
   document-service:
     build:
@@ -60,6 +64,12 @@ services:
       - document_uploads:/app/uploads
       - document_chroma:/app/chroma_db
 
+  redis:
+    image: redis:7-alpine
+    container_name: knowledge-bot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
 
 volumes:
 

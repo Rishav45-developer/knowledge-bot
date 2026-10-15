@@ -10,3 +10,4 @@ langchain==1.1.0
 langchain-core==1.2.11
 langgraph==1.0.5
 langchain-ollama==1.0.1
+redis==6.4.0
