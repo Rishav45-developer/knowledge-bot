@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import (
     FastAPI,
     Request,
@@ -194,6 +196,7 @@ async def admin_test(
 class DocumentSearchRequest(BaseModel):
     query: str
     n_results: int = 5
+    document_id: int | None = None
 
 
 @app.post("/documents/upload")
@@ -301,6 +304,8 @@ class ConversationRequest(BaseModel):
 
 class MessageRequest(BaseModel):
     content: str
+    mode: Literal["normal", "document"] = "normal"
+    document_id: int | None = None
 
 
 @app.get("/chat/conversations")

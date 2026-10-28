@@ -60,9 +60,33 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/document_db
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
     volumes:
       - document_uploads:/app/uploads
       - document_chroma:/app/chroma_db
+    depends_on:
+      - rabbitmq
+
+  document-worker:
+    build:
+      context: ./document-service
+    container_name: knowledge-bot-document-worker
+    command: ["python", "-m", "app.worker.consumer"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@host.docker.internal:5432/document_db
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - document_uploads:/app/uploads
+      - document_chroma:/app/chroma_db
+    depends_on:
+      - document-service
+      - rabbitmq
 
   redis:
     image: redis:7-alpine
@@ -71,8 +95,20 @@ services:
     ports:
       - "6379:6379"
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: knowledge-bot-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
 volumes:
-
   document_uploads:
-
   document_chroma:
+  rabbitmq_data:

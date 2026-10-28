@@ -1,7 +1,9 @@
+
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.sql import func
 
-from app.database.connection  import Base
+from app.database.connection import Base
+
 
 class Document(Base):
     __tablename__ = "documents"
@@ -16,8 +18,8 @@ class Document(Base):
         Integer,
         nullable=False,
         index=True
-
     )
+
     filename = Column(
         String(255),
         nullable=False
@@ -28,7 +30,17 @@ class Document(Base):
         nullable=False
     )
 
-    extracted_text = Column(Text, nullable=True)
+    extracted_text = Column(
+        Text,
+        nullable=True
+    )
+
+    processing_status = Column(
+        String(20),
+        nullable=False,
+        default="queued",
+        server_default="queued"
+    )
 
     created_at = Column(
         DateTime(timezone=True),

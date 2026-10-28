@@ -13,16 +13,13 @@ DOCUMENT_SERVICE_URL = os.getenv(
 )
 
 
+
 def search_documents(
     query: str,
     token: str,
-    n_results: int = 5
+    n_results: int = 5,
+    document_id: int | None = None,
 ):
-    """
-    Ask the Document Service to perform
-    semantic document search.
-    """
-
     url = f"{DOCUMENT_SERVICE_URL}/documents/search"
 
     headers = {
@@ -31,7 +28,8 @@ def search_documents(
 
     payload = {
         "query": query,
-        "n_results": n_results
+        "n_results": n_results,
+        "document_id": document_id,
     }
 
     response = httpx.post(
@@ -42,5 +40,4 @@ def search_documents(
     )
 
     response.raise_for_status()
-
     return response.json()

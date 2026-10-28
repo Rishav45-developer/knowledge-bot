@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -139,15 +138,15 @@ def create_message(
     db.commit()
     db.refresh(user_message)
 
-    # Step 5: Invoke LangGraph.
-    # user_id allows Redis document-search cache keys
-    # to be separated by authenticated user.
+    # Step 5: Invoke LangGraph using the requested mode.
     try:
         result = chat_graph.invoke({
             "message": message_data.content,
             "history": history,
             "token": current_user["token"],
             "user_id": user_id,
+            "mode": message_data.mode,
+            "document_id": message_data.document_id,
             "context": "",
             "response": "",
         })
@@ -214,7 +213,6 @@ def get_conversation_messages(
     messages = (
         db.query(Message)
         .filter(Message.conversation_id == conversation_id)
-        .order_by(Message.id.asc())
         .all()
     )
 

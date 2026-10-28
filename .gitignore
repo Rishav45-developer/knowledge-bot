@@ -1,6 +1,8 @@
 # Python virtual environments
 venv/
 **/venv/
+.venv/
+**/.venv/
 
 # Python cache
 __pycache__/
@@ -8,7 +10,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Environment variables
+# Environment variables / secrets
 .env
 **/.env
 
@@ -23,5 +25,16 @@ Thumbs.db
 # Logs
 *.log
 
-# ChromaDB local vector database
+# Backups and archives
+*.bak
+*.bak*
+*.tar.gz
+*.rar
+*.zip
+*.lnk
+backup-chat-container/
+
+# Local data
 **/chroma_db/
+**/uploads/
+*.sqlite3
